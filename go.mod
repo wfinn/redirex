@@ -7,4 +7,4 @@ require (
 	github.com/jpillora/go-tld v1.1.1
 )
 
-require golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
+require golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect
