@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/dbzer0/ipfmt/src/ipfmt"
@@ -108,7 +109,19 @@ func main() {
 		hostnames = append(hostnames, *target+char+"."+*attackerdomain)
 	}
 
-	//e.g. https://attacker.tld
+	//e.g. https://target.wtf
+	if u, err := tld.Parse("http://" + *target); err == nil {
+		if re, err := regexp.Compile(u.TLD + "$"); err == nil {
+			newTLD := "wtf"
+			if u.TLD == newTLD {
+				newTLD = "ooo"
+			}
+			u.TLD = newTLD
+			hostnames = append(hostnames, re.ReplaceAllString(*target, newTLD))
+		}
+	}
+
+	//printing all generated hostnames e.g. https://attacker.tld/callback
 	for _, domain := range hostnames {
 		fmt.Println(*proto + domain + *path)
 	}
